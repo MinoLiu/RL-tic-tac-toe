@@ -53,13 +53,13 @@ func (a *Agent) Play(b *board.Game) (string, error) {
 }
 
 // TrainPlay depend on epsilon random choice
-func (a *Agent) TrainPlay(b *board.Game) (string, error) {
+func (a *Agent) TrainPlay(b *board.Game) error {
 	_, nextAction := a.policy(b)
 	if err := b.MakeMove(nextAction); err != nil {
 		fmt.Println(err)
-		return "", err
+		return err
 	}
-	return b.State, nil
+	return nil
 }
 
 func (a *Agent) getReward(winner string) float64 {
@@ -113,10 +113,14 @@ func (a *Agent) policy(b *board.Game) (string, string) {
 
 // LearnFromMove reward
 // Q learning
-func (a *Agent) LearnFromMove(state, nextState string, winner string) {
-	reward := a.getReward(winner)
+func (a *Agent) LearnFromMove(state string, b *board.Game) {
+	reward := a.getReward(b.Winner)
 	currentStateValue := a.Values[state]
-	nextStateValue := a.Values[nextState]
+	nextStateValue := a.Values[b.State]
+	// if b.PlayAble() {
+	// 	best, _ := a.policy(b)
+	// 	nextStateValue = a.Values[best]
+	// }
 
 	a.Values[state] = currentStateValue + a.alpha*(reward+a.gamma*nextStateValue-currentStateValue)
 }
@@ -141,8 +145,6 @@ func (a *Agent) InteractiveGame() {
 		}
 		t++
 		for b.PlayAble() {
-			fmt.Printf("Round %d", round)
-			fmt.Println(b)
 			round++
 			if b.Player == a.Sign {
 				a.Play(b)
@@ -173,6 +175,8 @@ func (a *Agent) InteractiveGame() {
 					break
 				}
 			}
+			fmt.Printf("Round %d", round)
+			fmt.Println(b)
 		}
 		if b.Winner != " " {
 			fmt.Println(b.Winner + " Win this game")

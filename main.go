@@ -32,20 +32,9 @@ type entry struct {
 func (e entry) String() string {
 	return fmt.Sprintf("%v, %v\n", e.Timestamp, e.Value)
 }
-
-func main() {
-	agent.Init()
-
-	plot := len(os.Args) > 1 && os.Args[1] == "--plot"
-	// Create the board and two agent
+func learnGame(a1, a2 *agent.Agent, numEpisodes int) {
 	var b *board.Game
-	a1 := agent.New(0.5, 1, 0.1, "X")
-	a2 := agent.New(0.5, 1, 0.1, "O")
-	// Set the number of games to play and when a1 forget and stop to learn
-	loopNb := 30000
-	wins := make([]entry, 0, loopNb)
-	draw := make([]entry, 0, loopNb)
-	for i := 0; i < loopNb; i++ {
+	for i := 0; i < numEpisodes; i++ {
 		if i%2 == 0 {
 			b = board.New("X")
 		} else {
@@ -55,29 +44,35 @@ func main() {
 		for b.PlayAble() {
 			state := b.State
 			if b.Player == a1.Sign {
-				move, err := a1.TrainPlay(b)
-				if err != nil {
+				if err := a1.TrainPlay(b); err != nil {
 					fmt.Println(err)
 					break
 				}
-				a1.LearnFromMove(state, move, b.Winner)
-				a2.LearnFromMove(state, move, b.Winner)
+				a1.LearnFromMove(state, b)
+				a2.LearnFromMove(state, b)
 			} else if b.Player == a2.Sign {
-				move, err := a2.TrainPlay(b)
-				if err != nil {
+				if err := a2.TrainPlay(b); err != nil {
 					fmt.Println(err)
 					break
 				}
-				a1.LearnFromMove(state, move, b.Winner)
-				a2.LearnFromMove(state, move, b.Winner)
+				a1.LearnFromMove(state, b)
+				a2.LearnFromMove(state, b)
 			} else {
 				break
 			}
 
 		}
+		a1.LearnFromMove(b.State, b)
+		a2.LearnFromMove(b.State, b)
 	}
+}
+
+func demoGameStats(a1, a2 *agent.Agent, numEpisodes int) {
+	wins := make([]entry, 0, numEpisodes)
+	draw := make([]entry, 0, numEpisodes)
 	start := time.Now().UnixNano()
-	for i := 0; i < loopNb/2; i++ {
+	var b *board.Game
+	for i := 0; i < numEpisodes; i++ {
 		if i%2 == 0 {
 			b = board.New("X")
 		} else {
@@ -97,7 +92,7 @@ func main() {
 				break
 			}
 		}
-		// Get the winner and give rewards
+
 		if b.Winner == a1.Sign {
 			wins = append(wins, entry{time.Now().UnixNano() - start, b.Winner})
 		} else if b.Winner == a2.Sign {
@@ -107,18 +102,31 @@ func main() {
 		}
 	}
 	// Display new stats
-	fmt.Println("------------------")
-	fmt.Println("Both learning")
-	fmt.Println("------------------")
-	fmt.Printf("%v wins %v%% times\n", a1.Sign, float64(nbWins(wins, a1.Sign))/float64(loopNb/2)*100)
-	fmt.Printf("%v wins %v%% times\n", a2.Sign, float64(nbWins(wins, a2.Sign))/float64(loopNb/2)*100)
-	fmt.Printf("Draws %v%% times\n", float64(len(draw))/float64(loopNb/2)*100)
-	fmt.Println(len(draw))
-	if plot {
-		generateFigure(wins, draw, loopNb, a1, a2)
+	fmt.Printf("%v wins %v%% times\n", a1.Sign, float64(nbWins(wins, a1.Sign))/float64(numEpisodes)*100)
+	fmt.Printf("%v wins %v%% times\n", a2.Sign, float64(nbWins(wins, a2.Sign))/float64(numEpisodes)*100)
+	fmt.Printf("Draws %v%% times\n", float64(len(draw))/float64(numEpisodes)*100)
+	if len(os.Args) > 1 && os.Args[1] == "--plot" {
+		generateFigure(wins, draw, numEpisodes, a1, a2)
 	}
-	fmt.Println(a2.Values["XXOXOOXOX"])
-	a2.InteractiveGame()
+
+}
+
+func main() {
+	agent.Init()
+	// Create the board and two agent
+	a1 := agent.New(0.5, 1, 0.1, "X")
+	a2 := agent.New(0.5, 1, 0.1, "O")
+
+	fmt.Println("before leaning")
+	demoGameStats(a1, a2, 3000)
+
+	for i := 1; i <= 10; i++ {
+		fmt.Printf("after learning %d times\n", i*3000)
+		learnGame(a1, a2, 3000)
+		demoGameStats(a1, a2, 3000)
+	}
+
+	a1.InteractiveGame()
 }
 
 // Generate figure from the wins array
@@ -129,7 +137,7 @@ func generateFigure(wins []entry, draw []entry, loopNb int, a1 *agent.Agent, a2 
 		panic(err)
 	}
 	// Set plot meta data
-	p.Title.Text = "Both learn then O forget"
+	p.Title.Text = "Both learning"
 	p.X.Label.Text = "Time"
 	p.Y.Label.Text = "Number of wins"
 	// Build plot data
