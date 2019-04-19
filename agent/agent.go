@@ -52,14 +52,36 @@ func (a *Agent) Play(b *board.Game) (string, error) {
 	return b.State, nil
 }
 
-// TrainPlay depend on epsilon random choice
-func (a *Agent) TrainPlay(b *board.Game) error {
-	_, nextAction := a.policy(b)
-	if err := b.MakeMove(nextAction); err != nil {
-		fmt.Println(err)
-		return err
+// LearnGame learn tic tac toe game
+func (a *Agent) LearnGame(numEpisodes int) {
+	for i := 0; i < numEpisodes; i++ {
+		a.learnFromEpisode()
 	}
-	return nil
+}
+func (a *Agent) learnFromEpisode() {
+	b := board.New("O")
+	_, move := a.policy(b)
+	for move != "" {
+		move = a.learnFromMove(b, move)
+	}
+}
+
+func (a *Agent) learnFromMove(b *board.Game, move string) string {
+	if err := b.MakeMove(move); err != nil {
+		fmt.Println(err)
+		return ""
+	}
+	r := a.getReward(b.Winner)
+	nextStateValue := 0.0
+	bestMove := ""
+	nextMove := ""
+	if b.PlayAble() {
+		bestMove, nextMove = a.policy(b)
+		nextStateValue = a.Values[bestMove]
+	}
+	currStateValue := a.Values[move]
+	a.Values[move] = currStateValue + a.alpha*(r+a.gamma*nextStateValue-currStateValue)
+	return nextMove
 }
 
 func (a *Agent) getReward(winner string) float64 {
@@ -77,30 +99,45 @@ func (a *Agent) getReward(winner string) float64 {
 func (a *Agent) policy(b *board.Game) (string, string) {
 	posStates, _ := b.AllowMoves()
 	var nextAction string
-	if len(posStates) == 0 {
-		return "", ""
-	}
-	maxVal := a.Values[posStates[0]]
-	// Get the hightest valued state from posStates
-	for _, state := range posStates {
-		stateValue := a.Values[state]
-		if stateValue >= maxVal {
-			maxVal = stateValue
+
+	geteway := a.Values[posStates[0]]
+
+	if b.Player == a.Sign {
+		for _, state := range posStates {
+			stateValue := a.Values[state]
+			if stateValue >= geteway {
+				geteway = stateValue
+			}
+		}
+	} else {
+		for _, state := range posStates {
+			stateValue := a.Values[state]
+			if stateValue <= geteway {
+				geteway = stateValue
+			}
 		}
 	}
 
-	maxActions := []string{}
-	for _, state := range posStates {
-		if maxVal == a.Values[state] {
-			maxActions = append(maxActions, state)
+	actions := []string{}
+	if b.Player == a.Sign {
+		for _, state := range posStates {
+			if geteway == a.Values[state] {
+				actions = append(actions, state)
+			}
+		}
+	} else {
+		for _, state := range posStates {
+			if geteway == a.Values[state] {
+				actions = append(actions, state)
+			}
 		}
 	}
 
 	var bestAction string
-	if len(maxActions) > 1 {
-		bestAction = maxActions[r.Intn(len(maxActions))]
+	if len(actions) > 1 {
+		bestAction = actions[r.Intn(len(actions))]
 	} else {
-		bestAction = maxActions[0]
+		bestAction = actions[0]
 	}
 
 	nextAction = bestAction
@@ -109,20 +146,6 @@ func (a *Agent) policy(b *board.Game) (string, string) {
 		nextAction = posStates[r.Intn(len(posStates))]
 	}
 	return bestAction, nextAction
-}
-
-// LearnFromMove reward
-// Q learning
-func (a *Agent) LearnFromMove(state string, b *board.Game) {
-	reward := a.getReward(b.Winner)
-	currentStateValue := a.Values[state]
-	nextStateValue := a.Values[b.State]
-	// if b.PlayAble() {
-	// 	best, _ := a.policy(b)
-	// 	nextStateValue = a.Values[best]
-	// }
-
-	a.Values[state] = currentStateValue + a.alpha*(reward+a.gamma*nextStateValue-currentStateValue)
 }
 
 // Reset value
@@ -145,6 +168,8 @@ func (a *Agent) InteractiveGame() {
 		}
 		t++
 		for b.PlayAble() {
+			fmt.Printf("Round %d", round)
+			fmt.Println(b)
 			round++
 			if b.Player == a.Sign {
 				a.Play(b)
@@ -175,8 +200,7 @@ func (a *Agent) InteractiveGame() {
 					break
 				}
 			}
-			fmt.Printf("Round %d", round)
-			fmt.Println(b)
+
 		}
 		if b.Winner != " " {
 			fmt.Println(b.Winner + " Win this game")
